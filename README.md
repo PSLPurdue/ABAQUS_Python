@@ -1,5 +1,7 @@
 # ABAQUS Python codes - PSL Lab
 
-![Domes](Figures/Picture1.png)
+## Post Image ABAQUS
 
-![Domes Base](Figures/Object_Contact.gif)
+Change image quality, ajusts background color and remove mesh from ABAQUS Simulations
+
+![Domes](Figures/Img_Code.png)
