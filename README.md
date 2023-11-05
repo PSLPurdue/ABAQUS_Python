@@ -9,7 +9,7 @@ We create three different steps:
 + 1 inversion step 
 + 2 relax steps to get the final stable state after the load is inverted.
 
-![Domes](Figures/Dome_Curve.png)
+![Domes](Figures/Dome_Curve_1.png)
 
 ## Post Image ABAQUS
 
