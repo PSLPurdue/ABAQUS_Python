@@ -47,7 +47,7 @@ dome_model = mdb.models[filename]
 th = 0.6			# [mm] Thickness
 H = 6.0                         # [mm] Dome height
 base = 16.0                     # [mm] Dome base diameter
-Unit_Cell = 20.0
+Unit_Cell = 22.0
 
 R_ch = 8.5
 
@@ -67,7 +67,6 @@ nameM1 = "Material"
 Elas = 12.0  # Elastic Modulus [MPa]
 vp = 0.35  # Poisson Ratio [-]
 rho = 1.22e-9  # Material Density [Ton/mm^3]
-damp = 1e-8
 
 ##=======================================================================================================================
 ## GEOMETRY CONSTRUCTION (DOME)
@@ -173,7 +172,6 @@ del dome_model.sketches['Base_Sketch']
 dome_model.Material(name=nameM1)
 dome_model.materials[nameM1].Density(table=((rho,),))
 dome_model.materials[nameM1].Elastic(table=((Elas, vp),))
-dome_model.materials[nameM1].Damping(beta=damp)
 
 ##=======================================================================================================================
 ## MESH AND PARTITIONS
@@ -221,36 +219,6 @@ a.DatumCsysByDefault(CARTESIAN)
 a.Instance(name='Dome_Assembly', part=P, dependent=ON)
 
 ##=======================================================================================================================
-## SIMULATION STEP
-##=======================================================================================================================
-# STEP 1 -> Inversion
-dome_model.ImplicitDynamicsStep(name='Inversion', 
-                                previous='Initial', timePeriod=inv_time, maxNumInc=100000, 
-                                application=QUASI_STATIC, initialInc=0.01, minInc=1e-10, maxInc=0.1, 
-                                nohaf=OFF, amplitude=RAMP, alpha=DEFAULT, initialConditions=OFF, nlgeom=ON)
-
-# Request OUTPUTS in these case we reduce the field variables to work with smaller files
-save_n = 1 # Save every n time steps
-dome_model.fieldOutputRequests['F-Output-1'].setValues(variables=(
-        'S', 'EE', 'U', 'LE'),frequency=save_n)
-
-# Allways save the strain evergy over time .... Might be useful for multi-stable analysis
-dome_model.historyOutputRequests['H-Output-1'].setValues(
-        variables=('ALLIE', 'ALLKE', 'ALLSE', 'ALLSD', 'ETOTAL'),frequency=1)
-
-# # STEP 2 -> Relax Step
-# dome_model.ImplicitDynamicsStep(name='Dome_Relax_Step', 
-#                                 previous='Inversion', timePeriod=relax_time, maxNumInc=100000, 
-#                                 application=QUASI_STATIC, initialInc=0.01, minInc=1e-10, maxInc=1, 
-#                                 nohaf=OFF, amplitude=RAMP, alpha=DEFAULT, initialConditions=OFF, nlgeom=ON)
-
-
-# # STEP 3 -> Relax Step 1
-# dome_model.ImplicitDynamicsStep(name='Dome_Relax_Step_1', previous='Dome_Relax_Step', timePeriod=relax_time, maxNumInc=100000, 
-#                                 application=QUASI_STATIC, initialInc=0.01, minInc=1e-10, maxInc=1, 
-#                                 nohaf=OFF, amplitude=RAMP, alpha=DEFAULT, initialConditions=OFF, nlgeom=ON)
-
-##=======================================================================================================================
 ## BOUNDARY CONDITIONS SETS 
 ##=======================================================================================================================
 BC_Dome = a.instances['Dome_Assembly']
@@ -279,6 +247,21 @@ refPoints1=(RP_S[5], )
 a.Set(referencePoints=refPoints1, name='Tip_RP')
 
 ##=======================================================================================================================
+## SIMULATION STEP
+##=======================================================================================================================
+# STEP 1 -> Inversion
+regionDef=dome_model.rootAssembly.sets['Tip_RP']
+dome_model.StaticRiksStep(name='Inversion', previous='Initial',
+    nodeOn=ON, maximumDisplacement=-2.0*H, region=regionDef, dof=2,
+    maxNumInc=10000, initialArcInc=0.001, minArcInc=1e-8, maxArcInc=0.05,
+    nlgeom=ON)
+
+# Request OUTPUTS in these case we reduce the field variables to work with smaller files
+save_n = 1 # Save every n time steps
+dome_model.fieldOutputRequests['F-Output-1'].setValues(variables=(
+        'S', 'EE', 'U', 'LE'),frequency=save_n)
+
+##=======================================================================================================================
 ## COUPLING
 ##=======================================================================================================================
 region1=a.sets['Tip_RP']
@@ -289,7 +272,7 @@ side1Faces1 = f_assem.getByBoundingBox(-Unit_Cell/2,-10,-Unit_Cell/2,Unit_Cell/2
 region2=a.Surface(side1Faces=side1Faces1, name='Dome_Snap_Surface')
 dome_model.Coupling(name='Coupling', controlPoint=region1, 
                     surface=region2, influenceRadius=H-th/2, couplingType=DISTRIBUTING, 
-                    weightingMethod=LINEAR, localCsys=None, u1=ON, u2=ON, u3=ON, ur1=ON, ur2=ON, ur3=ON)
+                    weightingMethod=LINEAR, localCsys=None, u1=ON, u2=ON, u3=ON, ur1=OFF, ur2=OFF, ur3=OFF)
 
 ##=======================================================================================================================
 ## BOUNDARY CONDITIONS
@@ -300,11 +283,12 @@ dome_model.DisplacementBC(name='UC_Base', createStepName='Inversion', region=reg
                           ur3=UNSET, amplitude=UNSET, fixed=OFF, distributionType=UNIFORM, fieldName='', localCsys=None)
 
 region = a.sets['Tip_RP']
-dome_model.VelocityBC(name='Inversion', createStepName='Inversion', region=region, v1=0.0, v2=-vel_factor*H/inv_time, v3=0.0, 
-        vr1=0.0, vr2=0.0, vr3=0.0, amplitude=UNSET, localCsys=None, 
-        distributionType=UNIFORM, fieldName='')
-
-#dome_model.boundaryConditions['Inversion'].deactivate('Dome_Relax_Step')
+dome_model.DisplacementBC(name='Inversion', createStepName='Inversion',
+    region=a.sets['Tip_RP'],
+    u1=UNSET, u2=-vel_factor*H, u3=UNSET,
+    ur1=UNSET, ur2=UNSET, ur3=UNSET,
+    amplitude=UNSET, fixed=OFF, distributionType=UNIFORM,
+    fieldName='', localCsys=None)
 
 
 # =======================================================================================================================
